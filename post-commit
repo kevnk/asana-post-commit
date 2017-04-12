@@ -1,17 +1,7 @@
 #!/bin/bash
-
-# modified from http://brunohq.com/journal/speed-project-git-hook-for-asana/
-#
-# Added Bitbucket and GitHub links to Asana commits
-# modified by Richard Sumilang <me@richardsumilang.com>
-
 # -----------------------
 # necessary configuration:
 # git config --global user.asana-token "MY_ASANA_API_TOKEN" (http://app.asana.com/-/account_api)
-#
-# not necessary at the moment, but may be useful in future revisions of the script:
-# git config --local user.asana-workspace "WORKSPACE_ID" (found in the URL)
-# git config --local user.asana-project "PROJECT_ID" (found in the URL)
 # -----------------------
 
 apiToken=$(git config user.asana-token)
@@ -19,56 +9,73 @@ apiToken=$(git config user.asana-token)
 # defaults
 if [ $apiToken == '' ] ; then exit 0; fi
 
-# Find repo host
-for gitRemote in `git remote -v`; do
-    repo=`echo $gitRemote | egrep -o 'https?://[^ ]+'`
-    domain=`echo $repo | awk -F \/ '{l=split($3,a,"."); print (a[l-1]=="com"?a[l-2] OFS:X) a[l-1] OFS a[l]}' OFS="."`
+# Get repoUrl (manually)
+repoUrl='https://bitbucket.org/username/repo-name';
 
-    # Remove username if part of url
-    if [[ $domain == *"@"* ]]
-    then
-        domain=`echo $domain | awk -F"@" '{print $2}'`
-    fi
+# # Get repoUrl (automatically) — Doesn't work for ssh remote paths
+# for gitRemote in `git remote -v`; do
+#     repo=`echo $gitRemote | egrep -o 'https?://[^ ]+'`
+#     domain=`echo $repo | awk -F \/ '{l=split($3,a,"."); print (a[l-1]=="com"?a[l-2] OFS:X) a[l-1] OFS a[l]}' OFS="."`
 
-    # Bitbucket or GitHub paths
-    if [ $domain == 'bitbucket.org' ]
+#     # Remove username if part of url
+#     if [[ $domain == *"@"* ]]
+#     then
+#         domain=`echo $domain | awk -F"@" '{print $2}'`
+#     fi
+
+#     # Bitbucket or GitHub paths
+#     if [ $domain == 'bitbucket.org' ]
+#     then
+#         repoPath=${repo/*bitbucket.org\//}
+#         repoPath=${repoPath%.*}
+#         commitUrl="https://bitbucket.org/$repoPath/commits/"
+#         break;
+#     elif [ $domain == 'github.com' ]
+#     then
+#         repoPath=${repo/*github.com\//}
+#         repoPath=${repoPath%.*}
+#         commitUrl="https://github.com/$repoPath/commit/"
+#         break;
+#     else
+#         repoPath=$repo
+#         commitUrl=''
+#     fi
+# done
+
+
+print_comment=$(git log --pretty=format:"<b>commit <code>%h</code>:</b> %s
+<a href=\"${repoUrl}/commits/%h\">%h</a>" -n1)
+
+# Comment on the task that's related to the branch name
+if branch=$(git symbolic-ref --short -q HEAD)
+then
+    branchUrl=`echo "${repoUrl}/branch/${branch}"`;
+    print_comment=`echo "${print_comment}
+<a href=\"${branchUrl}\">${branch}</a>"`;
+    if taskid=`echo $branch | egrep -o '^feature\/?[0-9]+' | awk -F \/ '{print $2}'`
     then
-        repoPath=${repo/*bitbucket.org\//}
-        repoPath=${repoPath%.*}
-        commitUrl="https://bitbucket.org/$repoPath/commits/"
-        break;
-    elif [ $domain == 'github.com' ]
-    then
-        repoPath=${repo/*github.com\//}
-        repoPath=${repoPath%.*}
-        commitUrl="https://github.com/$repoPath/commit/"
-        break;
+        # Make request to asana
+        curl -X POST \
+            https://app.asana.com/api/1.0/tasks/${taskid}/stories \
+            -H "authorization: Bearer ${apiToken}" \
+            --data-urlencode "html_text=${print_comment}" > /dev/null 2>&1
     else
-        repoPath=$repo
-        commitUrl=''
+        echo "branch must be named 'feature/TASKID_description-of-task"
     fi
-done
+else
+  echo "not on any branch"
+fi
 
 
-# hold the closed ticket numbers
-declare -a closed
-# hold the ticket numbers that are not closed, just touched
-declare -a referenced
-# track whether we're currently closing tickets or just referencing them
-closes='NO'
-
+# Comment on tasks mentioned in the commit message
 # regex pattern to recognize a story number
 taskid_pattern='#([0-9]*)'
 # regex pattern to recognize a "closing this ticket" word
 closes_pattern='([Ff]ix|[Cc]lose|[Cc]losing)'
 # regex pattern to recognize an "and" word (eg "fixes #1, #2, and #3")
 and_pattern='([Aa]nd|&)'
-
 # get the checkin comment for parsing
 comment=$(git log --pretty=format:"%s %b" -n1)
-print_comment=$(git log --pretty=format:"Committed $commitUrl%h with message:
-\"%s\"
-to repository $repoPath" -n1)
 
 # break the commit comment down into words
 IFS=' ' read -a words <<< "$comment"
@@ -94,13 +101,17 @@ done
 # touch the stories we've referenced
 for element in "${referenced[@]}"
 do
-    curl -H "Authorization: Bearer ${apiToken}": https://app.asana.com/api/1.0/tasks/${element}/stories \
-         -d "text=${print_comment}" > /dev/null 2>&1
+    curl -X POST \
+        https://app.asana.com/api/1.0/tasks/${element}/stories \
+        -H "authorization: Bearer ${apiToken}" \
+        --data-urlencode "html_text=${print_comment}" > /dev/null 2>&1
 done
 
 # close the tasks we've fixed
 for element in "${closed[@]}"
 do
-    curl --request PUT -H "Authorization: Bearer ${apiToken}": https://app.asana.com/api/1.0/tasks/${element} \
-         -d "completed=true" > /dev/null 2>&1
+    curl -X PUT \
+        https://app.asana.com/api/1.0/tasks/${element} \
+        -H "authorization: Bearer ${apiToken}" \
+        --data-urlencode "completed=true" > /dev/null 2>&1
 done

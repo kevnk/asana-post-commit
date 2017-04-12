@@ -9,7 +9,7 @@ Copy the post-commit file to your repo's root `.git/hooks` directory. It's proba
 
 Then run the following command:
 
-`% git config --global user.asana-token "MY_ASANA_API_TOKEN" # (get the api key at http://app.asana.com/-/account_api)`
+`% git config --global user.asana-token "MY_ASANA_API_TOKEN" # (get the api token at http://app.asana.com/-/account_api)`
 
 Then chmod your hooks folder:
 `% chmod 655 .git/hooks`
