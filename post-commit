@@ -1,7 +1,9 @@
 #!/bin/bash
+
 # -----------------------
 # necessary configuration:
-# git config --global user.asana-token "MY_ASANA_API_TOKEN" (http://app.asana.com/-/account_api)
+# git config --global user.asana-token "MY_ASANA_API_TOKEN" # @see http://app.asana.com/-/account_api
+# Change `repoUrl` below to match the link to access your repo
 # -----------------------
 
 apiToken=$(git config user.asana-token)
@@ -9,40 +11,7 @@ apiToken=$(git config user.asana-token)
 # defaults
 if [ $apiToken == '' ] ; then exit 0; fi
 
-# Get repoUrl (manually)
-repoUrl='https://bitbucket.org/username/repo-name';
-
-# # Get repoUrl (automatically) — Doesn't work for ssh remote paths
-# for gitRemote in `git remote -v`; do
-#     repo=`echo $gitRemote | egrep -o 'https?://[^ ]+'`
-#     domain=`echo $repo | awk -F \/ '{l=split($3,a,"."); print (a[l-1]=="com"?a[l-2] OFS:X) a[l-1] OFS a[l]}' OFS="."`
-
-#     # Remove username if part of url
-#     if [[ $domain == *"@"* ]]
-#     then
-#         domain=`echo $domain | awk -F"@" '{print $2}'`
-#     fi
-
-#     # Bitbucket or GitHub paths
-#     if [ $domain == 'bitbucket.org' ]
-#     then
-#         repoPath=${repo/*bitbucket.org\//}
-#         repoPath=${repoPath%.*}
-#         commitUrl="https://bitbucket.org/$repoPath/commits/"
-#         break;
-#     elif [ $domain == 'github.com' ]
-#     then
-#         repoPath=${repo/*github.com\//}
-#         repoPath=${repoPath%.*}
-#         commitUrl="https://github.com/$repoPath/commit/"
-#         break;
-#     else
-#         repoPath=$repo
-#         commitUrl=''
-#     fi
-# done
-
-
+repoUrl='https://bitbucket.org/<your_username>/<your_repo>';
 print_comment=$(git log --pretty=format:"<b>commit <code>%h</code>:</b> %s
 <a href=\"${repoUrl}/commits/%h\">%h</a>" -n1)
 
